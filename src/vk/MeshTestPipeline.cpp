@@ -9,18 +9,10 @@
 static std::vector<uint32_t> read_spv_u32(const std::string& path)
 {
     std::ifstream file(path, std::ios::binary | std::ios::ate);
-    if (!file)
-    {
-        std::cerr << "Failed to open SPV: " << path << "\n";
-        std::exit(EXIT_FAILURE);
-    }
+    if (!file) { std::cerr << "Failed to open SPV: " << path << "\n"; std::exit(EXIT_FAILURE); }
 
     const std::streamsize size = file.tellg();
-    if (size <= 0 || (size % 4) != 0)
-    {
-        std::cerr << "Invalid SPV size: " << path << "\n";
-        std::exit(EXIT_FAILURE);
-    }
+    if (size <= 0 || (size % 4) != 0) { std::cerr << "Invalid SPV size: " << path << "\n"; std::exit(EXIT_FAILURE); }
 
     std::vector<uint32_t> data((size_t)size / 4);
     file.seekg(0, std::ios::beg);
@@ -60,11 +52,9 @@ void MeshTestPipeline::destroyPipeline()
 void MeshTestPipeline::destroyAll()
 {
     destroyPipeline();
-
     if (m_layout) vkDestroyPipelineLayout(m_device, m_layout, nullptr);
-    m_layout = VK_NULL_HANDLE;
-
     if (m_setLayout) vkDestroyDescriptorSetLayout(m_device, m_setLayout, nullptr);
+    m_layout = VK_NULL_HANDLE;
     m_setLayout = VK_NULL_HANDLE;
 }
 
@@ -78,40 +68,27 @@ void MeshTestPipeline::recreate(VkFormat colorFormat)
 
 void MeshTestPipeline::createLayouts()
 {
-    // binding 0: atlas sampler (frag)
-    VkDescriptorSetLayoutBinding b0{};
-    b0.binding = 0;
-    b0.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    b0.descriptorCount = 1;
-    b0.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    // 4 storage buffers, mesh stage only
+    VkDescriptorSetLayoutBinding b[4]{};
 
-    // binding 1: instances SSBO (mesh)
-    VkDescriptorSetLayoutBinding b1{};
-    b1.binding = 1;
-    b1.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    b1.descriptorCount = 1;
-    b1.stageFlags = VK_SHADER_STAGE_MESH_BIT_EXT;
-
-    VkDescriptorSetLayoutBinding bindings[2] = { b0, b1 };
+    for (int i = 0; i < 4; ++i)
+    {
+        b[i].binding = (uint32_t)i;
+        b[i].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        b[i].descriptorCount = 1;
+        b[i].stageFlags = VK_SHADER_STAGE_MESH_BIT_EXT;
+    }
 
     VkDescriptorSetLayoutCreateInfo sl{ VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO };
-    sl.bindingCount = 2;
-    sl.pBindings = bindings;
+    sl.bindingCount = 4;
+    sl.pBindings = b;
 
     vk_check(vkCreateDescriptorSetLayout(m_device, &sl, nullptr, &m_setLayout),
              "vkCreateDescriptorSetLayout");
 
-    // push constants: vec4(params) = 16 bytes
-    VkPushConstantRange pcr{};
-    pcr.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-    pcr.offset = 0;
-    pcr.size = 16;
-
     VkPipelineLayoutCreateInfo pl{ VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO };
     pl.setLayoutCount = 1;
     pl.pSetLayouts = &m_setLayout;
-    pl.pushConstantRangeCount = 1;
-    pl.pPushConstantRanges = &pcr;
 
     vk_check(vkCreatePipelineLayout(m_device, &pl, nullptr, &m_layout),
              "vkCreatePipelineLayout");
@@ -120,8 +97,8 @@ void MeshTestPipeline::createLayouts()
 void MeshTestPipeline::createPipeline()
 {
     const std::string base = std::string(APP_SHADER_DIR);
-    const std::string meshPath = base + "/mesh_test.mesh.spv";
-    const std::string fragPath = base + "/mesh_test.frag.spv";
+    const std::string meshPath = base + "/lb_glyphlets.mesh.spv";
+    const std::string fragPath = base + "/lb_glyphlets.frag.spv";
 
     auto meshCode = read_spv_u32(meshPath);
     auto fragCode = read_spv_u32(fragPath);
@@ -162,13 +139,7 @@ void MeshTestPipeline::createPipeline()
     cba.colorWriteMask =
         VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT |
         VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-    cba.blendEnable = VK_TRUE;
-    cba.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
-    cba.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-    cba.colorBlendOp = VK_BLEND_OP_ADD;
-    cba.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
-    cba.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-    cba.alphaBlendOp = VK_BLEND_OP_ADD;
+    cba.blendEnable = VK_FALSE;
 
     VkPipelineColorBlendStateCreateInfo cb{ VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO };
     cb.attachmentCount = 1;
@@ -199,7 +170,7 @@ void MeshTestPipeline::createPipeline()
     gp.subpass = 0;
 
     vk_check(vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1, &gp, nullptr, &m_pipeline),
-             "vkCreateGraphicsPipelines(msdf-text)");
+             "vkCreateGraphicsPipelines(loop-blinn)");
 
     vkDestroyShaderModule(m_device, fragMod, nullptr);
     vkDestroyShaderModule(m_device, meshMod, nullptr);

@@ -6,6 +6,7 @@
 
 #include <thread>
 #include <chrono>
+#include <memory>
 
 int main()
 {
@@ -33,8 +34,8 @@ int main()
 
     MeshTestPipeline pipeline(vk.device(), swapchain.format());
 
-    MeshTestRenderer renderer(
-        vk.physicalDevice(),          // <-- добавили
+    auto renderer = std::make_unique<MeshTestRenderer>(
+        vk.physicalDevice(),
         vk.device(),
         vk.graphicsQueue(),
         vk.presentQueue(),
@@ -47,12 +48,33 @@ int main()
     while (!window.shouldClose())
     {
         window.pollEvents();
+
         window.getFramebufferSize(fbW, fbH);
         if (fbW == 0 || fbH == 0)
             continue;
 
-        renderer.drawFrame(fbW, fbH);
+        // drawFrame() возвращает false если swapchain out-of-date/suboptimal
+        if (!renderer->drawFrame())
+        {
+            vkDeviceWaitIdle(vk.device());
+
+            swapchain.recreate(fbW, fbH);
+            pipeline.recreate(swapchain.format());
+
+            // Самый простой способ: пересоздать renderer (т.к. он хранит командные буферы/синхру по количеству images)
+            renderer = std::make_unique<MeshTestRenderer>(
+                vk.physicalDevice(),
+                vk.device(),
+                vk.graphicsQueue(),
+                vk.presentQueue(),
+                vk.graphicsFamily(),
+                swapchain,
+                pipeline,
+                vk.vkCmdDrawMeshTasksEXT
+            );
+        }
     }
 
+    vkDeviceWaitIdle(vk.device());
     return 0;
 }

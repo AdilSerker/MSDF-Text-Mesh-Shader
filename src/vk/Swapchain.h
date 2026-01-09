@@ -3,6 +3,7 @@
 #include <vulkan/vulkan.h>
 #include <vector>
 #include <cstdint>
+#include <cassert>
 
 class Swapchain
 {
@@ -27,11 +28,31 @@ public:
     VkFormat format() const { return m_format; }
     VkExtent2D extent() const { return m_extent; }
 
+    // ✅ методы, которых не хватало для MeshTestRenderer
+    uint32_t imageCount() const { return (uint32_t)m_images.size(); }
+
+    VkImage image(uint32_t i) const {
+        assert(i < m_images.size());
+        return m_images[i];
+    }
+
+    VkImageView imageView(uint32_t i) const {
+        assert(i < m_imageViews.size());
+        return m_imageViews[i];
+    }
+
     const std::vector<VkImage>& images() const { return m_images; }
     const std::vector<VkImageView>& imageViews() const { return m_imageViews; }
 
-    VkImageLayout layoutOf(uint32_t imageIndex) const { return m_imageLayouts[imageIndex]; }
-    void setLayout(uint32_t imageIndex, VkImageLayout layout) { m_imageLayouts[imageIndex] = layout; }
+    VkImageLayout layoutOf(uint32_t imageIndex) const {
+        assert(imageIndex < m_imageLayouts.size());
+        return m_imageLayouts[imageIndex];
+    }
+
+    void setLayout(uint32_t imageIndex, VkImageLayout layout) {
+        assert(imageIndex < m_imageLayouts.size());
+        m_imageLayouts[imageIndex] = layout;
+    }
 
 private:
     void create(int fbWidth, int fbHeight);

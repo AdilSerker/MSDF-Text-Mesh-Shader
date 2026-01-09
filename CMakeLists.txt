@@ -75,32 +75,51 @@ set(SHADER_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/shaders")
 set(SHADER_OUT_DIR "${CMAKE_BINARY_DIR}/shaders")
 file(MAKE_DIRECTORY "${SHADER_OUT_DIR}")
 
-set(MESH_SRC "${SHADER_SRC_DIR}/mesh_test.mesh.glsl")
-set(FRAG_SRC "${SHADER_SRC_DIR}/mesh_test.frag.glsl")
-
-set(MESH_SPV "${SHADER_OUT_DIR}/mesh_test.mesh.spv")
-set(FRAG_SPV "${SHADER_OUT_DIR}/mesh_test.frag.spv")
-
-add_custom_command(
-  OUTPUT "${MESH_SPV}"
-  COMMAND "${GLSLANG_VALIDATOR}" -V --target-env vulkan1.3 -S mesh -o "${MESH_SPV}" "${MESH_SRC}"
-  DEPENDS "${MESH_SRC}"
-  COMMENT "Compiling mesh shader"
+# Собираем все .glsl в папке shaders
+file(GLOB SHADER_SOURCES CONFIGURE_DEPENDS
+  "${SHADER_SRC_DIR}/*.glsl"
 )
 
-add_custom_command(
-  OUTPUT "${FRAG_SPV}"
-  COMMAND "${GLSLANG_VALIDATOR}" -V --target-env vulkan1.3 -S frag -o "${FRAG_SPV}" "${FRAG_SRC}"
-  DEPENDS "${FRAG_SRC}"
-  COMMENT "Compiling fragment shader"
-)
+set(SPIRV_BINARIES "")
 
-add_custom_target(shaders DEPENDS "${MESH_SPV}" "${FRAG_SPV}")
+foreach(SHADER ${SHADER_SOURCES})
+  get_filename_component(FILE_NAME ${SHADER} NAME)          # например lb_parenthesis.mesh.glsl
+  string(REPLACE ".glsl" "" FILE_BASE ${FILE_NAME})         # -> lb_parenthesis.mesh
+  set(SPIRV "${SHADER_OUT_DIR}/${FILE_BASE}.spv")           # -> .../lb_parenthesis.mesh.spv
+
+  # Определяем стадию по имени файла
+  if (FILE_NAME MATCHES "\\.vert\\.glsl$")
+    set(STAGE vert)
+  elseif (FILE_NAME MATCHES "\\.frag\\.glsl$")
+    set(STAGE frag)
+  elseif (FILE_NAME MATCHES "\\.comp\\.glsl$")
+    set(STAGE comp)
+  elseif (FILE_NAME MATCHES "\\.mesh\\.glsl$")
+    set(STAGE mesh)
+  elseif (FILE_NAME MATCHES "\\.task\\.glsl$")
+    set(STAGE task)
+  else()
+    message(FATAL_ERROR "Unknown shader stage for file: ${FILE_NAME}. Name must end with .vert.glsl/.frag.glsl/.mesh.glsl/.task.glsl/.comp.glsl")
+  endif()
+
+  add_custom_command(
+    OUTPUT "${SPIRV}"
+    COMMAND "${GLSLANG_VALIDATOR}" -V --target-env vulkan1.3 -S ${STAGE} -o "${SPIRV}" "${SHADER}"
+    DEPENDS "${SHADER}"
+    COMMENT "Compiling ${STAGE} shader: ${FILE_NAME}"
+    VERBATIM
+  )
+
+  list(APPEND SPIRV_BINARIES "${SPIRV}")
+endforeach()
+
+add_custom_target(shaders DEPENDS ${SPIRV_BINARIES})
 add_dependencies(app shaders)
 
 # --- Compile-time paths ---
 file(TO_CMAKE_PATH "${SHADER_OUT_DIR}" APP_SHADER_DIR_PATH)
 target_compile_definitions(app PRIVATE APP_SHADER_DIR="${APP_SHADER_DIR_PATH}")
+
 
 set(ASSETS_DIR "${CMAKE_CURRENT_SOURCE_DIR}/assets")
 file(TO_CMAKE_PATH "${ASSETS_DIR}" APP_ASSETS_DIR_PATH)

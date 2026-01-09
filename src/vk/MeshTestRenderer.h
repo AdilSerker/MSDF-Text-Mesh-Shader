@@ -1,9 +1,6 @@
 #pragma once
 
 #include <vulkan/vulkan.h>
-#include <array>
-#include <vector>
-#include <string>
 #include <cstdint>
 
 class Swapchain;
@@ -17,73 +14,75 @@ public:
         VkDevice device,
         VkQueue graphicsQueue,
         VkQueue presentQueue,
-        uint32_t graphicsFamily,
+        uint32_t graphicsQueueFamilyIndex,
         Swapchain& swapchain,
         MeshTestPipeline& pipeline,
-        PFN_vkCmdDrawMeshTasksEXT drawMeshTasks);
+        PFN_vkCmdDrawMeshTasksEXT cmdDrawMeshTasks);
 
     ~MeshTestRenderer();
 
-    bool drawFrame(int fbWidth, int fbHeight);
+    MeshTestRenderer(const MeshTestRenderer&) = delete;
+    MeshTestRenderer& operator=(const MeshTestRenderer&) = delete;
+
+    // Возвращает false если swapchain out-of-date/suboptimal (тогда снаружи пересоздай swapchain и renderer/pipeline)
+    bool drawFrame();
 
 private:
     void createCommandPoolAndBuffers();
+    void destroyCommandPoolAndBuffers();
+
     void createSyncObjects();
-    void createPerImageSemaphores();
-    void destroyPerImageSemaphores();
+    void destroySyncObjects();
 
-    void createMsdfResources();
-    void destroyMsdfResources();
+    void recordCommandBuffer(uint32_t imageIndex);
 
-    void updateInstances(uint32_t screenW, uint32_t screenH); // обновляем SSBO
-    void recordCommandBuffer(VkCommandBuffer cmd, uint32_t imageIndex);
+    // Loop–Blinn (glyphlets) resources
+    void createLoopBlinnBuffers();
+    void destroyLoopBlinnBuffers();
+
+    void createLBDescriptors();
+    void destroyLBDescriptors();
 
 private:
     VkPhysicalDevice m_phys = VK_NULL_HANDLE;
     VkDevice m_device = VK_NULL_HANDLE;
 
-    VkQueue m_graphicsQueue = VK_NULL_HANDLE;
+    VkQueue m_gfxQueue = VK_NULL_HANDLE;
     VkQueue m_presentQueue = VK_NULL_HANDLE;
-    uint32_t m_graphicsFamily = 0;
+    uint32_t m_gfxQueueFamily = 0;
 
     Swapchain& m_swapchain;
     MeshTestPipeline& m_pipeline;
-    PFN_vkCmdDrawMeshTasksEXT m_drawMeshTasks = nullptr;
+
+    PFN_vkCmdDrawMeshTasksEXT m_cmdDrawMeshTasks = nullptr;
 
     VkCommandPool m_cmdPool = VK_NULL_HANDLE;
 
-    static constexpr uint32_t kFramesInFlight = 2;
-    uint32_t m_frameIndex = 0;
+    VkCommandBuffer* m_cmdBuffers = nullptr;
+    uint32_t m_cmdBufferCount = 0;
 
-    std::array<VkCommandBuffer, kFramesInFlight> m_cmds{};
-    std::array<VkSemaphore,     kFramesInFlight> m_imageAvailable{};
-    std::array<VkFence,         kFramesInFlight> m_inFlight{};
+    // Per-swapchain-image sync (чтобы не ловить semaphore reuse ошибки)
+    VkSemaphore* m_imageAvailable = nullptr;
+    VkSemaphore* m_renderFinished = nullptr;
+    VkFence*     m_inFlightFence  = nullptr;
 
-    std::vector<VkSemaphore> m_renderFinishedPerImage;
+    // Loop–Blinn SSBOs
+    VkBuffer m_lbPosBuf = VK_NULL_HANDLE;
+    VkDeviceMemory m_lbPosMem = VK_NULL_HANDLE;
 
-    // --- MSDF atlas texture ---
-    VkImage m_atlasImg = VK_NULL_HANDLE;
-    VkDeviceMemory m_atlasMem = VK_NULL_HANDLE;
-    VkImageView m_atlasView = VK_NULL_HANDLE;
-    VkSampler m_atlasSampler = VK_NULL_HANDLE;
+    VkBuffer m_lbIdxBuf = VK_NULL_HANDLE;
+    VkDeviceMemory m_lbIdxMem = VK_NULL_HANDLE;
 
-    // --- Instances SSBO ---
-    VkBuffer m_instancesBuf = VK_NULL_HANDLE;
-    VkDeviceMemory m_instancesMem = VK_NULL_HANDLE;
-    void* m_instancesMapped = nullptr;
-    uint32_t m_glyphCount = 0;
+    VkBuffer m_lbTypeBuf = VK_NULL_HANDLE;
+    VkDeviceMemory m_lbTypeMem = VK_NULL_HANDLE;
 
-    // --- Descriptor ---
-    VkDescriptorPool m_descPool = VK_NULL_HANDLE;
-    VkDescriptorSet  m_descSet = VK_NULL_HANDLE;
+    VkBuffer m_lbInstBuf = VK_NULL_HANDLE;
+    VkDeviceMemory m_lbInstMem = VK_NULL_HANDLE;
+    void* m_lbInstMapped = nullptr;
 
-    // --- Text params ---
-    float m_pxRange = 4.0f;
-    bool  m_debugAtlas = false;
-    bool  m_flipAtlasV = true;
+    uint32_t m_instanceCount = 8;
 
-    std::string m_text = "Nahuy tak zhit'!";
-    float m_fontPx = 140.0f;     // высота шрифта на экране (примерно)
-    float m_startX = 60.0f;      // px
-    float m_baselineY = 180.0f;  // px от верха окна
+    // Descriptor (Loop–Blinn)
+    VkDescriptorPool m_lbDescPool = VK_NULL_HANDLE;
+    VkDescriptorSet  m_lbDescSet  = VK_NULL_HANDLE;
 };

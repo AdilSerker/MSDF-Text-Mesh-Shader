@@ -8,7 +8,8 @@ static VkSurfaceFormatKHR choose_format(const std::vector<VkSurfaceFormatKHR>& f
 {
     for (const auto& f : formats)
     {
-        if (f.format == VK_FORMAT_B8G8R8A8_SRGB && f.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+        if (f.format == VK_FORMAT_B8G8R8A8_SRGB &&
+            f.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
             return f;
     }
     return formats.front();
@@ -18,10 +19,10 @@ static VkPresentModeKHR choose_present_mode(const std::vector<VkPresentModeKHR>&
 {
     for (auto m : modes)
     {
-        if (m == VK_PRESENT_MODE_MAILBOX_KHR) // low-latency if available
+        if (m == VK_PRESENT_MODE_MAILBOX_KHR)
             return m;
     }
-    return VK_PRESENT_MODE_FIFO_KHR; // guaranteed
+    return VK_PRESENT_MODE_FIFO_KHR;
 }
 
 static VkExtent2D choose_extent(const VkSurfaceCapabilitiesKHR& caps, int fbWidth, int fbHeight)
@@ -143,7 +144,9 @@ void Swapchain::create(int fbWidth, int fbHeight)
         vk_check(vkCreateImageView(m_device, &vci, nullptr, &m_imageViews[i]), "vkCreateImageView");
     }
 
-    m_imageLayouts.assign(swapImgCount, VK_IMAGE_LAYOUT_UNDEFINED);
+    // ✅ Лучше стартовать с PRESENT_SRC_KHR, чтобы барьеры "PRESENT -> COLOR" не спорили с трекингом
+    // Если захочешь супер-строго, можно стартовать с UNDEFINED и в renderer делать спец-ветку для первого кадра.
+    m_imageLayouts.assign(swapImgCount, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
 
     std::cout << "Swapchain created: " << swapImgCount
               << " images, extent " << m_extent.width << "x" << m_extent.height << "\n";
